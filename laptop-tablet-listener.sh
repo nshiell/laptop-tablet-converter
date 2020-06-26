@@ -1,5 +1,7 @@
 #!/bin/bash
 
+LAST_ORIENTATION=
+
 function getOrientation {
     gdbus introspect --system --dest net.hadess.SensorProxy --object-path /net/hadess/SensorProxy | grep AccelerometerOrientation
 }
@@ -21,7 +23,11 @@ function getOrientationFromProp {
 
 while true; do
     accelerometerOrientationProp=$(getOrientation)
-    echo $accelerometerOrientationProp
-    getOrientationFromProp "$accelerometerOrientationProp"
+    newOrientation=$(getOrientationFromProp "$accelerometerOrientationProp")
+    if [ "$LAST_ORIENTATION" != "$newOrientation" ]; then
+        echo "Rotating to $newOrientation"
+        LAST_ORIENTATION=$newOrientation
+    fi
+
     sleep 1
 done
