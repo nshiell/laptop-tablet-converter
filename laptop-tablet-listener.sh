@@ -3,6 +3,7 @@
 
 LAST_ORIENTATION=
 PID_INHIBIT_KEYBOARD=0
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
 function getOrientation {
     gdbus introspect --system --dest net.hadess.SensorProxy --object-path /net/hadess/SensorProxy | grep AccelerometerOrientation
@@ -39,7 +40,8 @@ function listenToRotation {
             echo "Rotating to $newOrientation"
             LAST_ORIENTATION=$newOrientation
 
-            if [[ "$(ps aux | grep evtest | wc -l)" -gt 2 ]]; then
+            if [[ "$(ps aux | grep evtest | wc -l)" -gt 1 ]]; then
+            #if [[ "$PID_INHIBIT_KEYBOARD" -gt 0 ]]; then
                 case $newOrientation in
                     "right")
                         xrandr -o left
@@ -68,13 +70,12 @@ function listenToRotation {
 }
 
 function listenToKeyboardFlipEvent {
-    evtest --grab /dev/input/event1 SW_TABLET_MODE
+    "$SCRIPT_DIR/lid-closed-detector.py"
 }
 
 function listenToKeyboardFlip {
-    # | grep --fixed-strings 'Event: time' 
-    listenToKeyboardFlipEvent | grep --line-buffered '(SW_TABLET_MODE), value' | while read line; do
-        if [ "${line: -1}" == "1" ]; then
+    "$SCRIPT_DIR/lid-closed-detector.py" | while read line; do
+        if [ "$line" == "TABLET" ]; then
             #xinput --set-prop 5 "Device Enabled" 0
             #xinput disable "Virtual core XTEST keyboard"
             xinput set-prop 8 'Device Enabled' 0 # touchpad
@@ -82,13 +83,13 @@ function listenToKeyboardFlip {
             echo tablet mode
             echo
             echo
-            evtest --grab /dev/input/event0 &
+            evtest --grab /dev/input/event0 > /dev/null &
             PID_INHIBIT_KEYBOARD=$!
-        else
+        elif [ "$line" == "LAPTOP" ]; then
             #xinput enable "Virtual core XTEST keyboard"
-            xinput set-prop 8 'Device Enabled' 1
             if [[ "$PID_INHIBIT_KEYBOARD" -gt 0 ]]; then
-                echo "Killing $PID_INHIBIT_KEYBOARD"
+                echo "Killing keyboard inhibit: $PID_INHIBIT_KEYBOARD"
+                xinput set-prop 8 'Device Enabled' 1
                 kill $PID_INHIBIT_KEYBOARD
                 echo laptop mode
                 PID_INHIBIT_KEYBOARD=0
